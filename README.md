@@ -1,5 +1,5 @@
 # ec2-purge-snapshots-lambda
-An AWS Lambda function that purges EC2 snapshots according to the rules you specify. This script is based of of https://github.com/stiang/ec2-purge-snapshots
+An AWS Lambda function that purges EC2 snapshots according to the rules you specify. This script is based off of https://github.com/stiang/ec2-purge-snapshots
 
 ## Usage
 This python script is a meant to be run as a scheduled AWS Lamdba function. You should also have another script that takes regular volume snapshots like https://github.com/xombiemp/ec2-take-snapshots-lambda, and this script will allow you to set up a rolling retention policy for those snapshots.  You will need to configure the following variables at the top of the script:
