@@ -1,4 +1,3 @@
-from __future__ import print_function
 from datetime import timedelta
 from dateutil import parser, relativedelta, tz
 from boto3 import resource
@@ -7,11 +6,11 @@ from boto3 import resource
 # TAGS variable, but not both.
 # You must populate the HOURS, DAYS, WEEKS and MONTHS variables.
 
-# List of volume-ids, or "all" for all volumes
-# eg. ["vol-12345678", "vol-87654321"] or ["all"]
+# List of volume-ids
+# eg. ["vol-12345678"] or ["vol-12345678", "vol-87654321", ...]
 VOLUMES = []
 
-# Dictionary of tags to use to filter the snapshots. May specify multiple
+# Dictionary of tags to use to filter the volumes. May specify multiple
 # eg. {'key': 'value'} or {'key1': 'value1', 'key2': 'value2', ...}
 TAGS = {}
 
@@ -27,20 +26,25 @@ WEEKS = 0
 # The number of months to keep ONE snapshot per month
 MONTHS = 0
 
-# AWS region in which the snapshots exist
-REGION = "us-east-1"
+# AWS regions in which the snapshots exist
+# eg. ["us-east-1"] or ["us-east-1", "us-west-1", ...]
+REGIONS = ["us-east-1"]
 
 # The timezone in which daily snapshots will be kept at midnight
+# https://en.wikipedia.org/wiki/List_of_tz_database_time_zones#List
+# eg. "America/Denver"
 TIMEZONE = "UTC"
 
 
-def purge_snapshots(id, snaps, counts):
+def purge_snapshots(volume, snaps, counts, region):
     newest = snaps[-1]
     prev_start_date = None
     delete_count = 0
     keep_count = 0
 
-    print("---- RESULTS FOR {} ({} snapshots) ----".format(id, len(snaps)))
+    print("---- RESULTS FOR {} in {} ({} snapshots) ----".format(
+          volume, region, len(snaps))
+          )
 
     for snap in snaps:
         snap_date = snap.start_time.astimezone(tz.gettz(TIMEZONE))
@@ -78,8 +82,7 @@ def purge_snapshots(id, snaps, counts):
                 if snap.snapshot_id == newest.snapshot_id:
                     print(("Keeping {}: {}, {} hours old - will never"
                           " delete newest snapshot").format(
-                          snap.snapshot_id, snap_date,
-                          snap_age.seconds/3600)
+                          snap.snapshot_id, snap_date, snap_age.seconds//3600)
                           )
                     keep_count += 1
                 else:
@@ -93,69 +96,44 @@ def purge_snapshots(id, snaps, counts):
                     delete_count += 1
         else:
             print("Keeping {}: {}, {} hours old - {}-hour threshold".format(
-                  snap.snapshot_id, snap_date, snap_age.seconds/3600, HOURS)
+                  snap.snapshot_id, snap_date, snap_age.seconds//3600, HOURS)
                   )
             keep_count += 1
-    counts[id] = [delete_count, keep_count]
+    counts[volume] = [delete_count, keep_count]
 
 
-def get_vol_snaps(ec2, account_id, volume):
-    if len(VOLUMES) == VOLUMES.count("all"):
-        collection_filter = [
-            {
-                "Name": "owner-id",
-                "Values": [account_id]
-            },
-            {
-                "Name": "status",
-                "Values": ["completed"]
-            }
-        ]
-    else:
-        collection_filter = [
-            {
-                "Name": "volume-id",
-                "Values": [volume]
-            },
-            {
-                "Name": "owner-id",
-                "Values": [account_id]
-            },
-            {
-                "Name": "status",
-                "Values": ["completed"]
-            }
-        ]
-    collection = ec2.snapshots.filter(Filters=collection_filter)
-    return sorted(collection, key=lambda x: x.start_time)
-
-
-def get_tag_snaps(ec2, account_id):
+def get_vol_snaps(ec2, volume):
     collection_filter = [
         {
-            "Name": "owner-id",
-            "Values": [account_id]
+            "Name": "volume-id",
+            "Values": [volume]
         },
         {
             "Name": "status",
             "Values": ["completed"]
         }
     ]
-    for key, value in TAGS.iteritems():
+    collection = ec2.snapshots.filter(Filters=collection_filter)
+    return sorted(collection, key=lambda x: x.start_time)
+
+
+def get_tag_volumes(ec2):
+    collection_filter = []
+    for key, value in TAGS.items():
         collection_filter.append(
             {
                 "Name": "tag:" + key,
                 "Values": [value]
             }
         )
-    collection = ec2.snapshots.filter(Filters=collection_filter)
-    return sorted(collection, key=lambda x: x.start_time)
+    collection = ec2.volumes.filter(Filters=collection_filter)
+    return list(collection)
 
 
-def print_summary(counts):
+def print_summary(counts, region):
     print("\nSUMMARY:\n")
-    for id, (deleted, kept) in counts.iteritems():
-        print("{}:".format(id))
+    for volume, (deleted, kept) in counts.items():
+        print("{} in {}:".format(volume, region))
         print("  deleted: {}{}".format(
               deleted, NOT_REALLY_STR if deleted > 0 else "")
               )
@@ -179,26 +157,39 @@ def main(event, context):
                           )
     NOOP = event['noop'] if 'noop' in event else False
     NOT_REALLY_STR = " (not really)" if NOOP is not False else ""
-    ec2 = resource("ec2", region_name=REGION)
+    for region in REGIONS:
+        ec2 = resource("ec2", region_name=region)
 
-    if VOLUMES and not TAGS:
-        for volume in VOLUMES:
-            volume_counts = {}
-            snapshots = get_vol_snaps(ec2, event['account'], volume)
-            if snapshots:
-                purge_snapshots(volume, snapshots, volume_counts)
-                print_summary(volume_counts)
+        if VOLUMES and not TAGS:
+            for volume in VOLUMES:
+                volume_counts = {}
+                snapshots = get_vol_snaps(ec2, volume)
+                if snapshots:
+                    purge_snapshots(volume, snapshots, volume_counts, region)
+                    print_summary(volume_counts, region)
+                else:
+                    print(("No snapshots found with volume id:"
+                          " {} in {}").format(volume, region))
+        elif TAGS and not VOLUMES:
+            tag_string = " ".join("{}={}".format(key, val) for
+                                                (key, val) in TAGS.items())
+            volumes = get_tag_volumes(ec2)
+            if volumes:
+                for volume in volumes:
+                    volume_counts = {}
+                    snapshots = get_vol_snaps(ec2, volume.volume_id)
+                    if snapshots:
+                        purge_snapshots(volume.volume_id, snapshots,
+                                        volume_counts, region)
+                        print_summary(volume_counts, region)
+                    else:
+                        print(("No snapshots found with volume id:"
+                              " {} in {}").format(
+                              volume.volume_id, region)
+                              )
             else:
-                print("No snapshots found with volume id: {}".format(volume))
-    elif TAGS and not VOLUMES:
-        tag_counts = {}
-        tag_string = " ".join("{}={}".format(key, val) for
-                                            (key, val) in TAGS.iteritems())
-        snapshots = get_tag_snaps(ec2, event['account'])
-        if snapshots:
-            purge_snapshots(tag_string, snapshots, tag_counts)
-            print_summary(tag_counts)
+                print("No volumes found with tags: {} in {}".format(
+                      tag_string, region)
+                      )
         else:
-            print("No snapshots found with tags: {}".format(tag_string))
-    else:
-        print("You must populate either the VOLUMES OR the TAGS variable.")
+            print("You must populate either the VOLUMES OR the TAGS variable.")

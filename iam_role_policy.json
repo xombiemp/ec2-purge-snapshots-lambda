@@ -14,7 +14,8 @@
             "Effect": "Allow",
             "Action": [
                 "ec2:DescribeSnapshots",
-                "ec2:DeleteSnapshot"
+                "ec2:DeleteSnapshot",
+                "ec2:DescribeVolumes"
             ],
             "Resource": "*"
         }
