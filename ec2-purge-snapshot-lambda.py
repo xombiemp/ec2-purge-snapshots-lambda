@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from dateutil import parser, relativedelta, tz
 from boto3 import resource
 
@@ -149,7 +149,7 @@ def main(event, context):
     global NOOP
     global NOT_REALLY_STR
 
-    NOW = parser.parse(event['time']).astimezone(tz.gettz(TIMEZONE))
+    NOW = datetime.now(tz.gettz(TIMEZONE))
     START_WEEKS_AFTER = HOURS + (DAYS * 24)
     START_MONTHS_AFTER = START_WEEKS_AFTER + (WEEKS * 24 * 7)
     DELETE_BEFORE_DATE = ((NOW - timedelta(hours=START_MONTHS_AFTER)) -
