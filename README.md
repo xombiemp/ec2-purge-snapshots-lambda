@@ -10,7 +10,7 @@ VOLUMES - List of volume-ids
 eg. ["vol-12345678"] or ["vol-12345678", "vol-87654321", ...]
 
 TAGS - Dictionary of tags to use to filter the volumes. May specify multiple  
-eg. {'key': 'value'} or {'key1': 'value1', 'key2': 'value2', ...}
+eg. {"key": "value"} or {"key1": "value1", "key2": "value2", ...}
 
 HOURS -  The number of hours to keep ALL snapshots
 
@@ -55,7 +55,7 @@ In the Designer - Add triggers box click CloudWatch Events and click the CloudWa
 Your function will run every hour at 0 minutes. You can change the cron expression to your desired schedule. Click the Add button and then click the Save button.
 
 #### Test function
-You can test the function from the Lambda console. Click the Select a test event.. button and select Configure test events. Choose Scheduled Event from the Event template drop down. Change the account parameter to your actual AWS account number and you can modify the time parameter to a time relativly close to the current time. Note that the script does not expect the time to be before any of the time stamps on the snapshots, so choose a time in the future, or the current time. Add the following parameter to the structure "noop": "True".  This will tell the script to not actually delete any snapshots, but to print that it would have. Name the Event name noop and click the Create button. Click the Test button and you will see the results of the script running in the Lambda console.
+You can test the function from the Lambda console. Click the Select a test event.. button and select Configure test events. Choose Scheduled Event from the Event template drop down. Add the following parameter to the structure "noop": "True".  This will tell the script to not actually delete any snapshots, but to print that it would have. Name the Event name noop and click the Create button. Click the Test button and you will see the results of the script running in the Lambda console.
 
 #### CloudWatch logs
 You will be able to see the output when the script runs in the CloudWatch logs. Go to the CloudWatch service in the AWS Management console. Click on Logs and you will see the ec2-purge-snapshots log group. Click in it and you will see a Log Stream for every time the script is executed which contains all the output of the script. Go back to the Log Groups and click the Never Expire link in the Expire Events After column of the log group row. Change the Retention period to what you feel comfortable with.

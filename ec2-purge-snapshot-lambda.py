@@ -11,7 +11,7 @@ from boto3 import resource
 VOLUMES = []
 
 # Dictionary of tags to use to filter the volumes. May specify multiple
-# eg. {'key': 'value'} or {'key1': 'value1', 'key2': 'value2', ...}
+# eg. {"key": "value"} or {"key1": "value1", "key2": "value2", ...}
 TAGS = {}
 
 # The number of hours to keep ALL snapshots
@@ -155,7 +155,7 @@ def main(event, context):
     DELETE_BEFORE_DATE = ((NOW - timedelta(hours=START_MONTHS_AFTER)) -
                           relativedelta.relativedelta(months=MONTHS)
                           )
-    NOOP = event['noop'] if 'noop' in event else False
+    NOOP = event["noop"] if "noop" in event else False
     NOT_REALLY_STR = " (not really)" if NOOP is not False else ""
     for region in REGIONS:
         ec2 = resource("ec2", region_name=region)
