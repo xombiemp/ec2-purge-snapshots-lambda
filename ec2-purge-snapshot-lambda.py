@@ -82,7 +82,8 @@ def purge_snapshots(volume, snaps, counts, region):
                 if snap.snapshot_id == newest.snapshot_id:
                     print(("Keeping {}: {}, {} hours old - will never"
                           " delete newest snapshot").format(
-                          snap.snapshot_id, snap_date, snap_age.seconds//3600)
+                          snap.snapshot_id, snap_date,
+                          round(snap_age.seconds/3600))
                           )
                     keep_count += 1
                 else:
@@ -96,7 +97,8 @@ def purge_snapshots(volume, snaps, counts, region):
                     delete_count += 1
         else:
             print("Keeping {}: {}, {} hours old - {}-hour threshold".format(
-                  snap.snapshot_id, snap_date, snap_age.seconds//3600, HOURS)
+                  snap.snapshot_id, snap_date,
+                  round(snap_age.seconds/3600), HOURS)
                   )
             keep_count += 1
     counts[volume] = [delete_count, keep_count]
