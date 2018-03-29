@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta
-from dateutil import parser, relativedelta, tz
+from dateutil.relativedelta import relativedelta
+from dateutil.tz import gettz
 from boto3 import resource
 
 # You must populate either the VOLUMES variable or the
@@ -47,61 +48,63 @@ def purge_snapshots(volume, snaps, counts, region):
           )
 
     for snap in snaps:
-        snap_date = snap.start_time.astimezone(tz.gettz(TIMEZONE))
+        snap_date = snap.start_time.astimezone(gettz(TIMEZONE))
         if NOW > snap_date:
             snap_age = NOW - snap_date
         else:
             snap_age = timedelta()
-        # Hourly
         if snap_age > timedelta(hours=HOURS):
-            # Daily
             if snap_age <= timedelta(hours=START_WEEKS_AFTER):
+                # Daily
                 type_str = "day"
+                snap_age_rep = snap_age.days
                 start_date_str = snap_date.strftime("%Y-%m-%d")
-                start_date = parser.parse(start_date_str)
-            else:
+            elif snap_age <= timedelta(hours=START_MONTHS_AFTER):
                 # Weekly
-                if snap_age <= timedelta(hours=START_MONTHS_AFTER):
-                    type_str = "week"
-                    week_day = int(snap_date.strftime("%w"))
-                    start_date = snap_date - timedelta(days=week_day)
-                    start_date_str = start_date.strftime("%Y-%m-%d")
-                else:
-                    # Monthly
-                    type_str = "month"
-                    start_date_str = snap_date.strftime("%Y-%m")
-                    start_date = parser.parse(start_date_str + "-01")
+                type_str = "week"
+                snap_age_rep = int(snap_age.total_seconds()/3600/24/7)
+                week_day = int(snap_date.strftime("%w"))
+                start_date = snap_date - timedelta(days=week_day)
+                start_date_str = start_date.strftime("%Y-%m-%d")
+            else:
+                # Monthly
+                type_str = "month"
+                snap_age_rep = relativedelta(NOW, snap_date).months
+                start_date_str = snap_date.strftime("%Y-%m")
             if (start_date_str != prev_start_date and
                     snap_date > DELETE_BEFORE_DATE):
                 # Keep it
                 prev_start_date = start_date_str
-                print("Keeping {}: {}, {} days old - {} of {}".format(
-                      snap.snapshot_id, snap_date, snap_age.days,
+                print("Keeping {}: {}, {} {}{} old - {} of {}".format(
+                      snap.snapshot_id, snap_date, snap_age_rep, type_str,
+                      "" if snap_age_rep == 1 else "s",
                       type_str, start_date_str)
                       )
                 keep_count += 1
-            else:
+            elif snap.snapshot_id == newest.snapshot_id:
                 # Never delete the newest snapshot
-                if snap.snapshot_id == newest.snapshot_id:
-                    print(("Keeping {}: {}, {} hours old - will never"
-                          " delete newest snapshot").format(
-                          snap.snapshot_id, snap_date,
-                          round(snap_age.seconds/3600))
-                          )
-                    keep_count += 1
-                else:
-                    # Delete it
-                    print("- Deleting{} {}: {}, {} days old".format(
-                          NOT_REALLY_STR, snap.snapshot_id,
-                          snap_date, snap_age.days)
-                          )
-                    if NOOP is False:
-                        snap.delete()
-                    delete_count += 1
+                print(("Keeping {}: {}, {} {}{} old - will never"
+                      " delete newest snapshot").format(
+                      snap.snapshot_id, snap_date, snap_age_rep, type_str,
+                      "" if snap_age_rep == 1 else "s")
+                      )
+                keep_count += 1
+            else:
+                # Delete it
+                print("- Deleting{} {}: {}, {} {}{} old".format(
+                      NOT_REALLY_STR, snap.snapshot_id,
+                      snap_date, snap_age_rep, type_str,
+                      "" if snap_age_rep == 1 else "s")
+                      )
+                if NOOP is False:
+                    snap.delete()
+                delete_count += 1
         else:
-            print("Keeping {}: {}, {} hours old - {}-hour threshold".format(
-                  snap.snapshot_id, snap_date,
-                  round(snap_age.seconds/3600), HOURS)
+            # Hourly
+            snap_age_rep = round(snap_age.total_seconds()/3600)
+            print("Keeping {}: {}, {} hour{} old - {}-hour threshold".format(
+                  snap.snapshot_id, snap_date, snap_age_rep,
+                  "" if snap_age_rep == 1 else "s", HOURS)
                   )
             keep_count += 1
     counts[volume] = [delete_count, keep_count]
@@ -154,14 +157,14 @@ def main(event, context):
     global NOOP
     global NOT_REALLY_STR
 
-    NOW = datetime.now(tz.gettz(TIMEZONE)).replace(microsecond=0,
-                                                   second=0,
-                                                   minute=0
-                                                   )
+    NOW = datetime.now(gettz(TIMEZONE)).replace(microsecond=0,
+                                                second=0,
+                                                minute=0
+                                                )
     START_WEEKS_AFTER = HOURS + (DAYS * 24)
     START_MONTHS_AFTER = START_WEEKS_AFTER + (WEEKS * 24 * 7)
     DELETE_BEFORE_DATE = ((NOW - timedelta(hours=START_MONTHS_AFTER)) -
-                          relativedelta.relativedelta(months=MONTHS)
+                          relativedelta(months=MONTHS)
                           )
     NOOP = event["noop"] if "noop" in event else False
     NOT_REALLY_STR = " (not really)" if NOOP is not False else ""
