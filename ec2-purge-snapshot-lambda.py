@@ -154,7 +154,10 @@ def main(event, context):
     global NOOP
     global NOT_REALLY_STR
 
-    NOW = datetime.now(tz.gettz(TIMEZONE))
+    NOW = datetime.now(tz.gettz(TIMEZONE)).replace(microsecond=0,
+                                                   second=0,
+                                                   minute=0
+                                                   )
     START_WEEKS_AFTER = HOURS + (DAYS * 24)
     START_MONTHS_AFTER = START_WEEKS_AFTER + (WEEKS * 24 * 7)
     DELETE_BEFORE_DATE = ((NOW - timedelta(hours=START_MONTHS_AFTER)) -
