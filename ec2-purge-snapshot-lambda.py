@@ -48,7 +48,10 @@ def purge_snapshots(volume, snaps, counts, region):
 
     for snap in snaps:
         snap_date = snap.start_time.astimezone(tz.gettz(TIMEZONE))
-        snap_age = NOW - snap_date
+        if NOW > snap_date:
+            snap_age = NOW - snap_date
+        else:
+            snap_age = timedelta()
         # Hourly
         if snap_age > timedelta(hours=HOURS):
             # Daily
