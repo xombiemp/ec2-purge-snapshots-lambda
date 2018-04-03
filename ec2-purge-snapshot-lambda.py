@@ -53,7 +53,15 @@ def purge_snapshots(volume, snaps, counts, region):
             snap_age = NOW - snap_date
         else:
             snap_age = timedelta()
-        if snap_age > timedelta(hours=HOURS):
+        if snap_age <= timedelta(hours=HOURS):
+            # Hourly
+            snap_age_rep = round(snap_age.total_seconds()/3600)
+            print("Keeping {}: {}, {} hour{} old - {}-hour threshold".format(
+                  snap.snapshot_id, snap_date, snap_age_rep,
+                  "" if snap_age_rep == 1 else "s", HOURS)
+                  )
+            keep_count += 1
+        else:
             if snap_age <= timedelta(hours=START_WEEKS_AFTER):
                 # Daily
                 type_str = "day"
@@ -99,14 +107,6 @@ def purge_snapshots(volume, snaps, counts, region):
                 if NOOP is False:
                     snap.delete()
                 delete_count += 1
-        else:
-            # Hourly
-            snap_age_rep = round(snap_age.total_seconds()/3600)
-            print("Keeping {}: {}, {} hour{} old - {}-hour threshold".format(
-                  snap.snapshot_id, snap_date, snap_age_rep,
-                  "" if snap_age_rep == 1 else "s", HOURS)
-                  )
-            keep_count += 1
     counts[volume] = [delete_count, keep_count]
 
 
